@@ -1,0 +1,52 @@
+{{- $backends := dig "s3Backends" list .Values.velero }}
+{{- range $b := $backends }}
+---
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: {{ $b.name }}
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" $ | nindent 4 }}
+spec:
+  provider: aws
+  default: {{ default false $b.default }}
+  accessMode: ReadWrite
+  objectStorage:
+    bucket: {{ $b.bucket }}
+    {{- if $b.prefix }}
+    prefix: {{ $b.prefix }}
+    {{- end }}
+    {{- if $b.caCert }}
+    caCert: {{ $b.caCert | b64enc }}
+    {{- end }}
+  credential:
+    name: cloud-credentials
+    key: {{ $b.name }}
+  config:
+    region: {{ default "us-east-1" $b.region }}
+    {{- if $b.s3Url }}
+    s3Url: {{ $b.s3Url }}
+    {{- end }}
+    s3ForcePathStyle: "{{ default true $b.s3ForcePathStyle }}"
+    {{- if $b.insecureSkipTLSVerify }}
+    insecureSkipTLSVerify: "true"
+    {{- end }}
+{{- end }}
+{{- $vsls := dig "volumeSnapshotLocations" list .Values.velero }}
+{{- range $v := $vsls }}
+---
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: {{ $v.name }}
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" $ | nindent 4 }}
+spec:
+  provider: {{ $v.provider }}
+  {{- with $v.config }}
+  config:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

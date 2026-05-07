@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    prometheus.deckhouse.io/rules-watcher-enabled: "true"

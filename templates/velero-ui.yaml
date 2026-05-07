@@ -1,0 +1,103 @@
+{{/*
+Velero UI (otwld/velero-ui) — веб-интерфейс с OIDC через Dex.
+*/}}
+{{- $auth := dig "auth" dict .Values.velero }}
+{{- $authEnabled := dig "enabled" true $auth }}
+{{- $allowedGroups := dig "allowedGroups" list $auth }}
+{{- $dexIssuer := include "velero.dexIssuer" . }}
+{{- $oidcSecret := include "velero.oidcSecret" . }}
+{{- $uiHost := include "velero.uiHost" . }}
+{{- $localAdmin := dig "localAdmin" dict $auth }}
+{{- $localAdminUser := dig "username" "admin" $localAdmin }}
+{{- $localAdminPass := dig "password" (include "velero.uiAdminPassword" .) $localAdmin }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: velero-ui-config
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  ADMIN_USERNAME: {{ $localAdminUser | quote }}
+  ADMIN_PASSWORD: {{ $localAdminPass | quote }}
+  SECRET_KEY: {{ randAlphaNum 48 | quote }}
+  {{- if $authEnabled }}
+  {{- if and $dexIssuer $oidcSecret }}
+  AUTH_OIDC_ENABLED: "true"
+  AUTH_OIDC_ISSUER_URL: {{ $dexIssuer | quote }}
+  AUTH_OIDC_CLIENT_ID: "velero-ui"
+  AUTH_OIDC_CLIENT_SECRET: {{ $oidcSecret | quote }}
+  AUTH_OIDC_REDIRECT_URI: "https://{{ $uiHost }}/auth/oidc/callback"
+  AUTH_OIDC_SCOPES: "openid profile email groups"
+  {{- if $allowedGroups }}
+  AUTH_OIDC_ALLOWED_GROUPS: {{ join "," $allowedGroups | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero-ui
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    app: velero-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: velero-ui
+  template:
+    metadata:
+      labels:
+        {{- include "velero.labels" . | nindent 8 }}
+        app: velero-ui
+    spec:
+      serviceAccountName: velero-ui
+      containers:
+        - name: velero-ui
+          image: otwld/velero-ui:0.6.5
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: api
+              containerPort: 3001
+            - name: web
+              containerPort: 3000
+          env:
+            - name: VELERO_NAMESPACE
+              value: d8-velero
+            - name: APP_PORT
+              value: "3000"
+            - name: API_PORT
+              value: "3001"
+          envFrom:
+            - secretRef:
+                name: velero-ui-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: velero-ui
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    app: velero-ui
+spec:
+  selector:
+    app: velero-ui
+  ports:
+    - name: web
+      port: 3000
+      targetPort: 3000
+    - name: api
+      port: 3001
+      targetPort: 3001

@@ -1,0 +1,28 @@
+{{- $np := dig "networkPolicy" dict .Values.velero }}
+{{- $enabled := dig "enabled" true $np }}
+{{- if $enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: velero-default
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Доступ к Velero UI только через ingress-controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: d8-ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: d8-monitoring
+  egress:
+    # Разрешаем весь egress (S3, Dex, Kubernetes API)
+    - {}
+{{- end }}

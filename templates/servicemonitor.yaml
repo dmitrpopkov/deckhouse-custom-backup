@@ -1,0 +1,23 @@
+{{- $monitoring := dig "monitoring" dict .Values.velero }}
+{{- $enabled := dig "enabled" true $monitoring }}
+{{- if $enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: velero
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app: velero
+  namespaceSelector:
+    matchNames:
+      - d8-velero
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+{{- end }}

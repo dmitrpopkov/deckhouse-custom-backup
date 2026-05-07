@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: d8:velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: velero
+  namespace: d8-velero
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero-ui
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: d8:velero-ui
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["velero.io"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "namespaces", "secrets", "configmaps", "persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["snapshot.storage.k8s.io"]
+  resources: ["volumesnapshots", "volumesnapshotcontents"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: d8:velero-ui
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: d8:velero-ui
+subjects:
+- kind: ServiceAccount
+  name: velero-ui
+  namespace: d8-velero

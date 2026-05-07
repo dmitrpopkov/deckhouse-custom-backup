@@ -1,0 +1,11 @@
+# Понижаем уровень линтера до warn для Deckhouse-внутренних соглашений,
+# поскольку модуль распространяется как community и не обязан им следовать.
+linters:
+  module:
+    impact: warn
+  hooks:
+    impact: warn
+  images:
+    impact: warn
+  templates:
+    impact: warn

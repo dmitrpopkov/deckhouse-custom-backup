@@ -1,0 +1,31 @@
+{{/*
+DexClient CR — регистрирует Velero UI как OIDC-клиент в Dex DKP.
+Если auth.enabled=false — DexClient не создаётся.
+*/}}
+{{- $auth := dig "auth" dict .Values.velero }}
+{{- $authEnabled := dig "enabled" true $auth }}
+{{- $oidcSecret := include "velero.oidcSecret" . }}
+{{- $uiHost := include "velero.uiHost" . }}
+{{- $allowedGroups := dig "allowedGroups" list $auth }}
+{{- if and $authEnabled $oidcSecret $uiHost }}
+apiVersion: deckhouse.io/v1
+kind: DexClient
+metadata:
+  name: velero-ui
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+spec:
+  redirectURIs:
+    - https://{{ $uiHost }}/auth/oidc/callback
+    - https://{{ $uiHost }}/api/auth/oidc/callback
+  {{- if $allowedGroups }}
+  allowedGroups:
+  {{- range $allowedGroups }}
+    - {{ . | quote }}
+  {{- end }}
+  {{- end }}
+  trustedPeers:
+    - velero-ui
+  secret: {{ $oidcSecret | quote }}
+{{- end }}

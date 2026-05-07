@@ -1,0 +1,89 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Module tag (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  MODULE_NAME: velero
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/modules
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve module tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install werf
+        uses: werf/actions/install@v2
+        with:
+          version: 2.5.4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        run: |
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Build module bundle
+        env:
+          WERF_REPO: ${{ env.REGISTRY }}/${{ env.MODULE_NAME }}
+          MODULES_MODULE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          source <(werf ci-env github --as-file)
+          werf build bundle release-channel-version
+
+      - name: Publish bundle
+        env:
+          WERF_REPO: ${{ env.REGISTRY }}/${{ env.MODULE_NAME }}
+          MODULES_MODULE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          source <(werf ci-env github --as-file)
+          BUNDLE_IMG=$(werf stage image bundle)
+          REL_IMG=$(werf stage image release-channel-version)
+
+          # Push bundle as <module>:<tag>
+          crane copy "${BUNDLE_IMG}" "${{ env.REGISTRY }}/${{ env.MODULE_NAME }}:${MODULES_MODULE_TAG}"
+          # Push release-channel-version as <module>/release:<tag>
+          crane copy "${REL_IMG}" "${{ env.REGISTRY }}/${{ env.MODULE_NAME }}/release:${MODULES_MODULE_TAG}"
+
+      - name: Register module in source index (best effort)
+        continue-on-error: true
+        env:
+          MODULES_MODULE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          # Регистрируем тег модуля в parent-индексе. Может упасть, если у токена
+          # нет прав на parent-package. Это не критично — бандл уже опубликован.
+          crane append \
+            --new_layer="" \
+            --new_tag "${{ env.REGISTRY }}:${{ env.MODULE_NAME }}" \
+            || echo "registration in parent index failed — module is still installable via direct image"

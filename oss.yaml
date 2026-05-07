@@ -1,0 +1,22 @@
+- name: shell-operator
+  description: A tool for running event-driven scripts in a Kubernetes cluster
+  link: https://github.com/flant/shell-operator
+  logo: https://avatars.githubusercontent.com/u/14483705
+  licenses:
+  - Apache-2.0
+- name: velero
+  description: Backup and migrate Kubernetes resources and persistent volumes
+  link: https://github.com/vmware-tanzu/velero
+  logo: https://velero.io/img/Velero.svg
+  licenses:
+  - Apache-2.0
+- name: velero-helm-chart
+  description: Helm chart for Velero
+  link: https://github.com/vmware-tanzu/helm-charts/tree/main/charts/velero
+  licenses:
+  - Apache-2.0
+- name: velero-ui
+  description: Realtime Web-based UI dashboard for Velero by otwld
+  link: https://github.com/otwld/velero-ui
+  licenses:
+  - MIT

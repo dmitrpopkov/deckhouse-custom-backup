@@ -1,0 +1,123 @@
+# =============================================================================
+# Установка модуля Velero в Deckhouse Kubernetes Platform
+# Источник: ghcr.io/dmitrpopkov/modules (модуль velero)
+# =============================================================================
+#
+# ПОРЯДОК ПРИМЕНЕНИЯ (важно!):
+#   Способ A (рекомендуемый):  ./install.sh install-cluster.yaml
+#   Способ B (вручную):
+#     1) применить блоки 1+2 (ModuleSource + ModuleUpdatePolicy)
+#     2) подождать пока появится `d8 k get module velero` (до 90 сек)
+#     3) применить блок 3 (ModuleConfig)
+#
+# ПРЕДВАРИТЕЛЬНЫЕ УСЛОВИЯ:
+#   - Включён user-authn, cert-manager, ingress-nginx
+#   - Пакеты ghcr.io/<owner>/modules/velero и .../velero/release — Public
+#   - Запущен Deploy workflow для release_channel=alpha, tag=v0.1.0
+# =============================================================================
+
+---
+# 1. ModuleSource — источник модулей
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleSource
+metadata:
+  name: dmitrpopkov
+spec:
+  registry:
+    repo: ghcr.io/dmitrpopkov/modules
+    scheme: HTTPS
+
+---
+# 2. ModuleUpdatePolicy
+apiVersion: deckhouse.io/v1alpha2
+kind: ModuleUpdatePolicy
+metadata:
+  name: velero-policy
+spec:
+  releaseChannel: Alpha
+  update:
+    mode: Auto
+
+---
+# 3. ModuleConfig — настройки модуля velero
+#    ⚠️ Применять только после того, как DKP подтянул модуль из ModuleSource
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: velero
+spec:
+  enabled: true
+  version: 1
+  source: dmitrpopkov
+  updatePolicy: velero-policy
+  settings:
+    # ----- Внешний адрес портала Velero UI -----
+    ingress:
+      host: velero.example.com           # ⚠️ ЗАМЕНИТЬ
+      ingressClassName: nginx
+    https:
+      mode: CertManager
+      certManager:
+        clusterIssuerName: letsencrypt   # или letsencrypt-staging для тестов
+
+    # ----- Авторизация через Dex (SSO с DKP) -----
+    auth:
+      enabled: true
+      # Список групп из IdP, которым разрешён вход в Velero UI.
+      # Пустой список — разрешено всем аутентифицированным.
+      allowedGroups:
+        - velero-admins
+        - infra-team
+      allowedEmailDomains:
+        - example.com
+
+    # ----- S3 backends (>=1; первый default=true становится основным) -----
+    s3Backends:
+      - name: primary
+        default: true
+        bucket: velero-backups            # ⚠️ ЗАМЕНИТЬ
+        region: us-east-1
+        s3Url: https://s3.example.com     # для AWS можно опустить
+        s3ForcePathStyle: true            # true для MinIO/Ceph; false для AWS
+        accessKey: AKIAEXAMPLE            # ⚠️ ЗАМЕНИТЬ
+        secretKey: SECRETEXAMPLE          # ⚠️ ЗАМЕНИТЬ
+        prefix: cluster-prod
+        # caCert: |                       # для self-signed S3
+        #   -----BEGIN CERTIFICATE-----
+        #   ...
+
+      # Пример второго BSL (DR):
+      # - name: dr
+      #   bucket: velero-backups-dr
+      #   region: ru-central-1
+      #   s3Url: https://hb.bizmrg.com
+      #   accessKey: ...
+      #   secretKey: ...
+
+    # ----- VolumeSnapshotLocation для CSI snapshots (опционально) -----
+    # volumeSnapshotLocations:
+    #   - name: csi
+    #     provider: csi
+    #     config:
+    #       driver: rook-ceph.rbd.csi.ceph.com
+
+    # ----- Node Agent (FS backup) -----
+    nodeAgent:
+      enabled: true
+      uploaderType: kopia                  # kopia (рекомендуется) или restic
+      defaultVolumesToFsBackup: false      # true — бэкап всех PV без аннотаций
+
+    # ----- Velero server tuning -----
+    velero:
+      defaultBackupTTL: "720h"             # 30 дней
+      logLevel: info
+      metrics:
+        enabled: true
+
+    # ----- ServiceMonitor для Prometheus -----
+    monitoring:
+      enabled: true
+
+    # ----- NetworkPolicy между namespace -----
+    networkPolicy:
+      enabled: true

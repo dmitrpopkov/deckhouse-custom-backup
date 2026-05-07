@@ -1,0 +1,7 @@
+.werf/
+.helm/charts/*.tgz
+.helm/Chart.lock
+charts/velero/Chart.lock
+charts/velero/charts/
+*.swp
+.DS_Store

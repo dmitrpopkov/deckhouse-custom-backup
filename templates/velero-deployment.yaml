@@ -1,0 +1,192 @@
+{{/*
+Velero server deployment.
+Образ vmware-tanzu/velero:v1.16.x. CRDs устанавливаем отдельным манифестом.
+*/}}
+{{- $velero := dig "velero" dict .Values.velero }}
+{{- $logLevel := dig "logLevel" "info" $velero }}
+{{- $defaultTTL := dig "defaultBackupTTL" "720h" $velero }}
+{{- $nodeAgent := dig "nodeAgent" dict .Values.velero }}
+{{- $nodeAgentEnabled := dig "enabled" true $nodeAgent }}
+{{- $uploaderType := dig "uploaderType" "kopia" $nodeAgent }}
+{{- $defaultVolumesToFsBackup := dig "defaultVolumesToFsBackup" false $nodeAgent }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    app: velero
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: velero
+  template:
+    metadata:
+      labels:
+        {{- include "velero.labels" . | nindent 8 }}
+        app: velero
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: velero
+      containers:
+        - name: velero
+          image: velero/velero:v1.16.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - --log-level={{ $logLevel }}
+            - --default-backup-ttl={{ $defaultTTL }}
+            - --uploader-type={{ $uploaderType }}
+            {{- if $defaultVolumesToFsBackup }}
+            - --default-volumes-to-fs-backup
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 8085
+              protocol: TCP
+          env:
+            - name: VELERO_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: VELERO_SCRATCH_DIR
+              value: /scratch
+            - name: AWS_SHARED_CREDENTIALS_FILE
+              value: /credentials/cloud
+          volumeMounts:
+            - name: plugins
+              mountPath: /plugins
+            - name: scratch
+              mountPath: /scratch
+            - name: cloud-credentials
+              mountPath: /credentials
+          resources:
+            {{- if .Values.velero.resources }}
+            {{- toYaml .Values.velero.resources | nindent 12 }}
+            {{- else }}
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+            {{- end }}
+      initContainers:
+        - name: velero-plugin-for-aws
+          image: velero/velero-plugin-for-aws:v1.12.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /target
+              name: plugins
+        - name: velero-plugin-for-csi
+          image: velero/velero-plugin-for-csi:v0.7.1
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /target
+              name: plugins
+      volumes:
+        - name: plugins
+          emptyDir: {}
+        - name: scratch
+          emptyDir: {}
+        - name: cloud-credentials
+          secret:
+            secretName: cloud-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: velero
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    app: velero
+spec:
+  selector:
+    app: velero
+  ports:
+    - name: metrics
+      port: 8085
+      targetPort: 8085
+{{- if $nodeAgentEnabled }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+    app: node-agent
+spec:
+  selector:
+    matchLabels:
+      app: node-agent
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "velero.labels" . | nindent 8 }}
+        app: node-agent
+    spec:
+      serviceAccountName: velero
+      hostPID: false
+      containers:
+        - name: node-agent
+          image: velero/velero:v1.16.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /velero
+          args:
+            - node-agent
+            - server
+            - --log-level={{ $logLevel }}
+            - --uploader-type={{ $uploaderType }}
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          env:
+            - name: VELERO_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: VELERO_SCRATCH_DIR
+              value: /scratch
+            - name: AWS_SHARED_CREDENTIALS_FILE
+              value: /credentials/cloud
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: host-pods
+              mountPath: /host_pods
+              mountPropagation: HostToContainer
+            - name: scratch
+              mountPath: /scratch
+            - name: cloud-credentials
+              mountPath: /credentials
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: host-pods
+          hostPath:
+            path: /var/lib/kubelet/pods
+        - name: scratch
+          emptyDir: {}
+        - name: cloud-credentials
+          secret:
+            secretName: cloud-credentials
+{{- end }}

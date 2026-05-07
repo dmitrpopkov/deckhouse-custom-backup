@@ -1,0 +1,240 @@
+type: object
+properties:
+  ingress:
+    type: object
+    description: |
+      Параметры Ingress для веб-интерфейса Velero UI.
+    properties:
+      host:
+        type: string
+        description: FQDN для портала Velero UI (например, velero.example.com).
+        x-examples: ["velero.example.com"]
+      ingressClassName:
+        type: string
+        description: Имя IngressClass.
+        default: nginx
+      annotations:
+        type: object
+        description: Дополнительные аннотации для Ingress.
+        additionalProperties:
+          type: string
+        default: {}
+    required: [host]
+
+  https:
+    type: object
+    description: Параметры HTTPS для портала.
+    default:
+      mode: CertManager
+      certManager:
+        clusterIssuerName: letsencrypt
+    properties:
+      mode:
+        type: string
+        enum: [Disabled, CertManager, CustomCertificate]
+        default: CertManager
+      certManager:
+        type: object
+        properties:
+          clusterIssuerName:
+            type: string
+            default: letsencrypt
+      customCertificate:
+        type: object
+        properties:
+          secretName:
+            type: string
+
+  auth:
+    type: object
+    description: Параметры аутентификации Velero UI через Dex (OIDC).
+    default:
+      enabled: true
+      allowedGroups: []
+      allowedEmailDomains: []
+    properties:
+      enabled:
+        type: boolean
+        default: true
+        description: |
+          Включить SSO через Dex DKP. Если false — UI будет защищён локальным
+          логином/паролем (см. localAdmin).
+      allowedGroups:
+        type: array
+        description: |
+          Список групп из IdP, которым разрешён доступ к UI.
+          Пустой список — разрешено всем аутентифицированным.
+        items:
+          type: string
+        default: []
+      allowedEmailDomains:
+        type: array
+        items:
+          type: string
+        default: []
+      localAdmin:
+        type: object
+        description: |
+          Локальный администратор (используется только если auth.enabled=false
+          или как fallback).
+        properties:
+          username:
+            type: string
+            default: admin
+          password:
+            type: string
+            description: |
+              Пароль локального администратора. Если не задан — будет
+              сгенерирован автоматически и сохранён в Secret d8-velero/velero-ui-admin.
+
+  s3Backends:
+    type: array
+    description: |
+      Список S3-совместимых хранилищ для BackupStorageLocation.
+      Каждое хранилище создаст отдельный BSL и Secret с credentials.
+      Первый элемент с default=true становится BSL по умолчанию.
+    default: []
+    items:
+      type: object
+      required: [name, bucket, region, accessKey, secretKey]
+      properties:
+        name:
+          type: string
+          description: Имя BackupStorageLocation (lowercase, alphanumeric).
+          pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        default:
+          type: boolean
+          default: false
+          description: Использовать как BSL по умолчанию.
+        bucket:
+          type: string
+          description: S3 bucket name.
+        region:
+          type: string
+          description: S3 region.
+          default: us-east-1
+        s3Url:
+          type: string
+          description: |
+            Полный URL S3 endpoint (требуется для MinIO/Ceph RGW).
+            Для AWS S3 можно опустить.
+        s3ForcePathStyle:
+          type: boolean
+          default: true
+          description: |
+            Использовать path-style URL вместо virtual-hosted (нужно для MinIO).
+        accessKey:
+          type: string
+          description: S3 access key ID.
+        secretKey:
+          type: string
+          description: S3 secret access key.
+          format: password
+        prefix:
+          type: string
+          description: Префикс внутри bucket для бэкапов.
+        insecureSkipTLSVerify:
+          type: boolean
+          default: false
+        caCert:
+          type: string
+          description: |
+            CA bundle (PEM) для self-signed S3 endpoint. Будет смонтирован
+            в Velero и проверен при доступе к BSL.
+
+  volumeSnapshotLocations:
+    type: array
+    description: |
+      Дополнительные VolumeSnapshotLocation. Если пусто — VSL не создаются
+      (используется CSI snapshot driver и/или fs-backup через node-agent).
+    default: []
+    items:
+      type: object
+      required: [name, provider]
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+          description: csi, aws, и т. п.
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          default: {}
+
+  nodeAgent:
+    type: object
+    description: |
+      Параметры node-agent (file system backup, прежний restic).
+    default:
+      enabled: true
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      defaultVolumesToFsBackup:
+        type: boolean
+        default: false
+        description: |
+          Если true — node-agent будет бэкапить все volumes pod'ов без
+          необходимости явно ставить аннотацию.
+      uploaderType:
+        type: string
+        enum: [kopia, restic]
+        default: kopia
+        description: |
+          Движок file system backup. По умолчанию kopia (рекомендуется,
+          быстрее и надёжнее на больших томах).
+
+  velero:
+    type: object
+    description: Тонкие настройки velero server.
+    default: {}
+    properties:
+      defaultBackupTTL:
+        type: string
+        default: "720h"
+        description: TTL по умолчанию для новых бэкапов (Go duration).
+      logLevel:
+        type: string
+        enum: [debug, info, warning, error]
+        default: info
+      metrics:
+        type: object
+        properties:
+          enabled:
+            type: boolean
+            default: true
+
+  resources:
+    type: object
+    description: Ресурсы для пода velero server.
+    default: {}
+    additionalProperties: true
+
+  storageClass:
+    type: string
+    description: |
+      StorageClass для PVC, если потребуется (по умолчанию Velero не использует
+      PVC, но node-agent может).
+
+  monitoring:
+    type: object
+    default:
+      enabled: true
+    properties:
+      enabled:
+        type: boolean
+        default: true
+
+  networkPolicy:
+    type: object
+    default:
+      enabled: true
+    properties:
+      enabled:
+        type: boolean
+        default: true
+
+required: [ingress, s3Backends]

@@ -1,0 +1,13 @@
+name: velero
+weight: 910
+namespace: d8-velero
+tags:
+  - backup
+  - disaster-recovery
+  - velero
+descriptions:
+  en: "Velero backup module for DKP — multi-S3 BackupStorageLocations, FS backup via node-agent, web UI with Dex SSO."
+  ru: "Модуль резервного копирования Velero для DKP — несколько S3 BSL, файловые бэкапы через node-agent, веб-интерфейс с SSO через Dex."
+requirements:
+  deckhouse: ">= 1.64"
+  kubernetes: ">= 1.27"

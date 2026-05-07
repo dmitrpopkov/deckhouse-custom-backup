@@ -1,0 +1,60 @@
+{{/*
+Velero CRDs устанавливаются одноразовым Job через `velero install --crds-only`.
+Это надёжнее, чем хранить копию CRDs в модуле, и автоматически подтягивает
+правильную версию для образа velero/velero:v1.16.0.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: d8:velero:crd-installer
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "create", "update", "patch", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: d8:velero:crd-installer
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: d8:velero:crd-installer
+subjects:
+- kind: ServiceAccount
+  name: velero
+  namespace: d8-velero
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: velero-crd-installer
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        {{- include "velero.labels" . | nindent 8 }}
+        app: velero-crd-installer
+    spec:
+      serviceAccountName: velero
+      restartPolicy: OnFailure
+      containers:
+        - name: installer
+          image: velero/velero:v1.16.0
+          command: ["/velero"]
+          args:
+            - install
+            - --crds-only

@@ -1,0 +1,15 @@
+type: object
+properties:
+  internal:
+    type: object
+    default: {}
+    properties:
+      dexIssuer:
+        type: string
+        description: URL издателя Dex (обнаруживается hook'ом).
+      oidcClientSecret:
+        type: string
+        description: Сгенерированный OIDC client secret для регистрации в Dex.
+      uiAdminPassword:
+        type: string
+        description: Сгенерированный пароль локального администратора.

@@ -1,0 +1,52 @@
+{{- $ingress := dig "ingress" dict .Values.velero }}
+{{- $host := dig "host" "" $ingress }}
+{{- $class := dig "ingressClassName" "nginx" $ingress }}
+{{- $annotations := dig "annotations" dict $ingress }}
+{{- $https := dig "https" dict .Values.velero }}
+{{- $httpsMode := dig "mode" "CertManager" $https }}
+{{- $issuer := dig "certManager" dict $https | dig "clusterIssuerName" "letsencrypt" }}
+{{- $customSecret := dig "customCertificate" dict $https | dig "secretName" "" }}
+{{- if $host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: velero-ui
+  namespace: d8-velero
+  labels:
+    {{- include "velero.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq $httpsMode "CertManager" }}
+    cert-manager.io/cluster-issuer: {{ $issuer | quote }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    {{- range $k, $v := $annotations }}
+    {{ $k }}: {{ $v | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $class }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: velero-ui
+                port:
+                  number: 3001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: velero-ui
+                port:
+                  number: 3000
+  {{- if ne $httpsMode "Disabled" }}
+  tls:
+    - hosts:
+        - {{ $host }}
+      secretName: {{ if eq $httpsMode "CustomCertificate" }}{{ $customSecret }}{{ else }}velero-ui-tls{{ end }}
+  {{- end }}
+{{- end }}

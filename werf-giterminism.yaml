@@ -1,0 +1,13 @@
+giterminismConfigVersion: 1
+config:
+  goTemplateRendering:
+    allowEnvVariables:
+    - "/^CI_.+/"
+    - MODULES_MODULE_TAG
+    - STAGED_DOCKERFILE
+  stapel:
+    allowFromLatest: true
+  dockerfile:
+    allowUncommitted:
+    - base_images.yml
+    - images/hooks/Dockerfile

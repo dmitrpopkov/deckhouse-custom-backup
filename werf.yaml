@@ -1,0 +1,44 @@
+configVersion: 1
+project: d8-velero
+deploy:
+  namespace: d8-velero
+---
+image: hooks
+context: .
+dockerfile: images/hooks/Dockerfile
+---
+image: bundle
+from: registry.deckhouse.io/base_images/distroless:static-debian12
+import:
+- image: hooks
+  add: /
+  to: /
+  before: setup
+  includePaths:
+  - hooks
+  - images/hooks
+git:
+- add: /
+  to: /
+  stageDependencies:
+    setup: ["**/*"]
+  excludePaths:
+  - .git
+  - .github
+  - .gitignore
+  - .dockerignore
+  - werf.yaml
+  - werf-giterminism.yaml
+  - images/hooks/Dockerfile
+  - docs/**
+  - examples/**
+  - README.md
+  - LICENSE
+---
+image: release-channel-version
+from: registry.deckhouse.io/base_images/distroless:static-debian12
+git:
+- add: /module.yaml
+  to: /module.yaml
+  stageDependencies:
+    setup: ["**/*"]
