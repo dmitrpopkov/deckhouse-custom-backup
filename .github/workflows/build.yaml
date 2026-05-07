@@ -59,7 +59,7 @@ jobs:
           WERF_REPO: ${{ env.REGISTRY }}/${{ env.MODULE_NAME }}
           MODULES_MODULE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          source <(werf ci-env github --as-file)
+          eval "$(werf ci-env github)"
           werf build bundle release-channel-version
 
       - name: Publish bundle
@@ -67,7 +67,7 @@ jobs:
           WERF_REPO: ${{ env.REGISTRY }}/${{ env.MODULE_NAME }}
           MODULES_MODULE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          source <(werf ci-env github --as-file)
+          eval "$(werf ci-env github)"
           BUNDLE_IMG=$(werf stage image bundle)
           REL_IMG=$(werf stage image release-channel-version)
 
