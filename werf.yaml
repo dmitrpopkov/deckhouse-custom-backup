@@ -8,7 +8,7 @@ context: .
 dockerfile: images/hooks/Dockerfile
 ---
 image: bundle
-from: registry.deckhouse.io/base_images/distroless:static-debian12
+from: gcr.io/distroless/static-debian12:nonroot
 import:
 - image: hooks
   add: /
@@ -20,8 +20,6 @@ import:
 git:
 - add: /
   to: /
-  stageDependencies:
-    setup: ["**/*"]
   excludePaths:
   - .git
   - .github
@@ -36,9 +34,7 @@ git:
   - LICENSE
 ---
 image: release-channel-version
-from: registry.deckhouse.io/base_images/distroless:static-debian12
+from: gcr.io/distroless/static-debian12:nonroot
 git:
 - add: /module.yaml
   to: /module.yaml
-  stageDependencies:
-    setup: ["**/*"]
