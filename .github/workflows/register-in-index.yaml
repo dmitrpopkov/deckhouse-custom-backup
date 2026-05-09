@@ -1,0 +1,40 @@
+name: Register in module index
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Module version tag"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        run: |
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Tag module in parent index
+        run: |
+          # DKP при опросе ModuleSource перечисляет теги parent-репозитория
+          # ghcr.io/<owner>/modules. Чтобы DKP увидел модуль 'velero',
+          # в parent-индексе должен быть тег с именем 'velero'.
+          # Привязываем его к нашему bundle-образу.
+          SRC="ghcr.io/${{ github.repository_owner }}/modules/velero:${{ inputs.tag }}"
+          DST="ghcr.io/${{ github.repository_owner }}/modules:velero"
+          crane copy "$SRC" "$DST"
+          echo "Registered: $DST → $SRC"
