@@ -1,0 +1,88 @@
+name: Publish release-channel version (with version.json)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Module version (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      channel:
+        description: "Release channel"
+        required: true
+        type: choice
+        options: [alpha, beta, early-access, stable, rock-solid]
+        default: alpha
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  MODULE_NAME: velero
+  REGISTRY: ghcr.io/${{ github.repository_owner }}/modules
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        run: |
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+
+      - name: Build release-channel image with version.json
+        env:
+          TAG: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          mkdir -p ./release-content
+          cat > ./release-content/version.json <<EOF
+          {"version":"${TAG}"}
+          EOF
+          cat > ./release-content/changelog.yaml <<EOF
+          ${TAG}:
+            features:
+              - "Initial release of velero module for DKP"
+              - "Multi-S3 BackupStorageLocations"
+              - "Velero UI with Dex SSO"
+              - "node-agent (kopia) for FS backup"
+          EOF
+
+          # Build minimal scratch image with just these two files
+          mkdir -p /tmp/release-image-root
+          cp ./release-content/version.json /tmp/release-image-root/
+          cp ./release-content/changelog.yaml /tmp/release-image-root/
+
+          # Create OCI image using crane
+          tar -C /tmp/release-image-root -cf /tmp/release-layer.tar version.json changelog.yaml
+          crane append \
+            -f /tmp/release-layer.tar \
+            -t "${REGISTRY}/${MODULE_NAME}/release:${TAG}" \
+            -b gcr.io/distroless/static-debian12:nonroot
+
+          # Tag same image as channel
+          crane copy \
+            "${REGISTRY}/${MODULE_NAME}/release:${TAG}" \
+            "${REGISTRY}/${MODULE_NAME}/release:${CHANNEL}"
+
+          echo "Published:"
+          echo "  ${REGISTRY}/${MODULE_NAME}/release:${TAG}"
+          echo "  ${REGISTRY}/${MODULE_NAME}/release:${CHANNEL}"
+
+      - name: Verify version.json
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          crane export "${REGISTRY}/${MODULE_NAME}/release:${TAG}" - \
+            | tar -xOf - version.json
+          echo ""
+          echo "✓ version.json successfully extracted"
