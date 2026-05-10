@@ -108,7 +108,7 @@ spec:
       defaultVolumesToFsBackup: false      # true — бэкап всех PV без аннотаций
 
     # ----- Velero server tuning -----
-    velero:
+    server:
       defaultBackupTTL: "720h"             # 30 дней
       logLevel: info
       metrics:

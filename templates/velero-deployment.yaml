@@ -2,7 +2,7 @@
 Velero server deployment.
 Образ vmware-tanzu/velero:v1.16.x. CRDs устанавливаем отдельным манифестом.
 */}}
-{{- $velero := dig "velero" dict .Values.velero }}
+{{- $velero := dig "server" dict .Values.velero }}
 {{- $logLevel := dig "logLevel" "info" $velero }}
 {{- $defaultTTL := dig "defaultBackupTTL" "720h" $velero }}
 {{- $nodeAgent := dig "nodeAgent" dict .Values.velero }}

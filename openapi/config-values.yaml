@@ -187,9 +187,9 @@ properties:
           Движок file system backup. По умолчанию kopia (рекомендуется,
           быстрее и надёжнее на больших томах).
 
-  velero:
+  server:
     type: object
-    description: Тонкие настройки velero server.
+    description: Тонкие настройки velero server (бывшее поле velero — переименовано из-за конфликта имён).
     default: {}
     properties:
       defaultBackupTTL:
